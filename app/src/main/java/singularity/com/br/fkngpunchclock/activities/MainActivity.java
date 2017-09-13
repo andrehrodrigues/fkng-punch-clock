@@ -58,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     PunchListAdapter adapter;
     ArrayList<ClockPunch> clockPunches;
     Double dayTotalBalance = 0.0;
+    Double monthBalanceDayBefore = 0.0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,32 +73,34 @@ public class MainActivity extends AppCompatActivity {
             db = mDbHelper.getWritableDatabase();
         }
 
-//        scheduleAutomaticDayBalanceCalculationJob();
+        db = mDbHelper.getWritableDatabase();
+        mDbHelper.onUpgrade(db,1,1);
 
-        Date date = new Date();
+//        scheduleAutomaticDayBalanceCalculationJob();
 
         View includedLayout = findViewById(R.id.generalStatusLay);
         dayBalance = (TextView)includedLayout.findViewById(R.id.gsl_day_total_value);
         monthBalance = (TextView)includedLayout.findViewById(R.id.gsl_month_balance_value);
 
-        //Set the punchDate to the current date.
         punchDate = (TextView) findViewById(R.id.punchDate);
-        punchDate.setText(dateFormat.format(date).toString());
-
         punchTime = (TextClock) findViewById(R.id.punchTime);
-
         inOutImage = (ImageView) findViewById(R.id.inOutImage);
-
+        batidasLV = (ListView) findViewById(R.id.batidasLV);
+        addButton = (FloatingActionButton) findViewById(R.id.addButton);
         clockPunches = new ArrayList<>();
 
+        //Get current date.
+        Date date = new Date();
+
+        //Set the punchDate to the current date.
+        punchDate.setText(dateFormat.format(date).toString());
+
         //Set the view list (and respective adapter) to keep the ongoing clock punchs.
-        batidasLV = (ListView) findViewById(R.id.batidasLV);
         adapter = new PunchListAdapter(MainActivity.this, R.layout.ponto_item_list_view, clockPunches);
         batidasLV.setAdapter(adapter);
         refreshListView(dateFormat.format(date).toString());
 
         //Floating button for adding.
-        addButton = (FloatingActionButton) findViewById(R.id.addButton);
         addButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -105,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        getMonthBalance();
+        getMonthBalance( String.valueOf(Calendar.getInstance().get(Calendar.MONTH)+ 1) , String.valueOf(Calendar.getInstance().get(Calendar.YEAR)) );
 
     }//End of OnCreate()
 
@@ -114,11 +117,7 @@ public class MainActivity extends AppCompatActivity {
         deletePunchDB(itemToRemove);
     }
 
-    public void showToastMessage(String toastString) {
-        Toast.makeText(this, toastString, Toast.LENGTH_LONG).show();
-    }
-
-    public void getCurrentDayBalance(){
+    public Long getClockPunchesBalance(ArrayList<ClockPunch> clockPunches){
         Long dayTotal = 0L;
         SimpleDateFormat format = new SimpleDateFormat("HH:mm");
         if(clockPunches.size() > 1) {
@@ -136,9 +135,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        dayTotalBalance = Long.valueOf(TimeUnit.MILLISECONDS.toHours(dayTotal)).doubleValue();
-
-        dayBalance.setText(millisecondsToTimeString(dayTotal));
+        return Long.valueOf(TimeUnit.MILLISECONDS.toHours(dayTotal));
     }
 
     public String millisecondsToTimeString(Long millis){
@@ -165,7 +162,10 @@ public class MainActivity extends AppCompatActivity {
                         inOutImage.setImageResource(R.drawable.ic_flight_land_black_24dp);
                     }
 
-                    getCurrentDayBalance();
+                    Long sum = getClockPunchesBalance(result);
+
+                    dayTotalBalance = Long.valueOf(TimeUnit.MILLISECONDS.toHours(sum)).doubleValue();
+                    dayBalance.setText(millisecondsToTimeString(sum));
 
                 } else {
                     showToastMessage("Nenhum ponto encontrado");
@@ -176,9 +176,15 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    public void showToastMessage(String toastString) {
+        Toast.makeText(this, toastString, Toast.LENGTH_LONG).show();
+    }
+
     public void insertPunchDB(ClockPunch pt) {
         ContentValues val = new ContentValues();
-        val.put(DBContract.ClockPunch.COLUMN_NAME_DATE, pt.getDate());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_DAY, pt.getDay());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_MONTH, pt.getMonth());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_YEAR, pt.getYear());
         val.put(DBContract.ClockPunch.COLUMN_NAME_TIME, pt.getTime());
         TaskListener listener = new TaskListener() {
             @Override
@@ -197,7 +203,9 @@ public class MainActivity extends AppCompatActivity {
     public void deletePunchDB(ClockPunch pt) {
         ContentValues val = new ContentValues();
         val.put(DBContract.ClockPunch._ID, pt.getId());
-        val.put(DBContract.ClockPunch.COLUMN_NAME_DATE, pt.getDate());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_DAY, pt.getDay());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_MONTH, pt.getMonth());
+        val.put(DBContract.ClockPunch.COLUMN_NAME_YEAR, pt.getYear());
         val.put(DBContract.ClockPunch.COLUMN_NAME_TIME, pt.getTime());
         TaskListener listener = new TaskListener() {
             @Override
@@ -211,11 +219,39 @@ public class MainActivity extends AppCompatActivity {
         new RemoveClockPunchTask(listener).execute(val);
     }
 
-    public void getMonthBalance() {
-        ContentValues val = new ContentValues();
-        val.put(DBContract.DayBalance.COLUMN_NAME_MONTH, Calendar.getInstance().get(Calendar.MONTH)+ 1 );
-        val.put(DBContract.DayBalance.COLUMN_NAME_YEAR,  Calendar.getInstance().get(Calendar.YEAR));
-        new CalculateMonthBalanceTask().execute(val);
+    public void getMonthBalance(String month, String year) {
+
+        TaskListener listener = new TaskListener() {
+            @Override
+            public void onFinished() {}
+
+            @Override
+            public void onFinished(ArrayList result) {
+                if (result.size() > 0) {
+                    ArrayList<ClockPunch> cps = (ArrayList<ClockPunch>) result;
+
+                    monthBalance.setText(millisecondsToTimeString( getClockPunchesBalance(cps) ));
+
+                    ArrayList<ClockPunch> cpsToRemove = new ArrayList<>();
+                    for (ClockPunch cp: cps) {
+                        if( cp.getDay() == (Calendar.getInstance().get(Calendar.DAY_OF_MONTH))
+                            && cp.getMonth() == (Calendar.getInstance().get(Calendar.MONTH)+ 1)
+                            && cp.getYear() == (Calendar.getInstance().get(Calendar.YEAR)) ){
+
+                            cpsToRemove.add(cp);
+                        }
+                    }
+
+                    cps.removeAll(cpsToRemove);
+
+                    monthBalanceDayBefore = Long.valueOf( getClockPunchesBalance(cps) ).doubleValue();
+
+                } else {
+                    showToastMessage("Nenhum ponto encontrado");
+                }
+            }
+        };
+        new GetClockPunchesTask(listener).execute(month+"/"+year);
     }
 
     public void scheduleAutomaticDayBalanceCalculationJob(){
@@ -261,20 +297,26 @@ public class MainActivity extends AppCompatActivity {
             // you will actually use after this query.
             String[] projection = {
                     DBContract.ClockPunch._ID,
-                    DBContract.ClockPunch.COLUMN_NAME_DATE,
+                    DBContract.ClockPunch.COLUMN_NAME_DAY,
+                    DBContract.ClockPunch.COLUMN_NAME_MONTH,
+                    DBContract.ClockPunch.COLUMN_NAME_YEAR,
                     DBContract.ClockPunch.COLUMN_NAME_TIME
             };
 
-            String campo = "(";
-            for (int aux = 0; aux < date.length; aux++) {
-                campo += "'" + date[aux] + "'";
-                if (aux < date.length - 1) {
-                    campo += ',';
-                }
+            String parts[] = date[0].split("/");
+            for (int aux = 0; aux < parts.length; aux++) {
+                parts[aux] = parts[aux].replaceFirst("^0+(?!$)", "");
             }
-            campo += ")";
 
-            String selection = DBContract.ClockPunch.COLUMN_NAME_DATE + " in " + campo;
+            String selection;
+            if( parts.length == 2){
+                selection = DBContract.ClockPunch.COLUMN_NAME_MONTH + " = " + parts[0]
+                        + " AND "+ DBContract.ClockPunch.COLUMN_NAME_YEAR + " = "+parts[1];
+            }else{
+                selection = DBContract.ClockPunch.COLUMN_NAME_DAY + " = " + parts[0]
+                        + " AND " +DBContract.ClockPunch.COLUMN_NAME_MONTH + " = " + parts[1]
+                        + " AND " + DBContract.ClockPunch.COLUMN_NAME_YEAR + " = " + parts[2];
+            }
 
             Cursor cursor = db.query(
                     DBContract.ClockPunch.TABLE_NAME, projection, selection, null, null, null, null);
@@ -285,8 +327,12 @@ public class MainActivity extends AppCompatActivity {
                 ClockPunch pt = new ClockPunch();
                 pt.setId(cursor.getInt(
                         cursor.getColumnIndexOrThrow(DBContract.ClockPunch._ID)));
-                pt.setDate(cursor.getString(
-                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_DATE)));
+                pt.setDay(cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_DAY)));
+                pt.setMonth(cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_MONTH)));
+                pt.setYear(cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_YEAR)));
                 pt.setTime(cursor.getString(
                         cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_TIME)));
                 clockPunches.add(pt);
@@ -340,7 +386,11 @@ public class MainActivity extends AppCompatActivity {
             long newRowId = 0;
             String reg="";
             for (ContentValues pt : pontos) {
-                reg+=pt.get(DBContract.ClockPunch.COLUMN_NAME_DATE)+" "+pt.get(DBContract.ClockPunch.COLUMN_NAME_TIME)+" ";
+                reg+=pt.get(DBContract.ClockPunch.COLUMN_NAME_DAY)+"/"
+                        + pt.get(DBContract.ClockPunch.COLUMN_NAME_MONTH)+"/"
+                        + pt.get(DBContract.ClockPunch.COLUMN_NAME_YEAR)+" - "
+                        + pt.get(DBContract.ClockPunch.COLUMN_NAME_TIME)+" " +
+                        "";
                 newRowId = db.delete(DBContract.ClockPunch.TABLE_NAME, DBContract.ClockPunch._ID + " = " + pt.get("id"), null);
             }
             return reg;
@@ -352,78 +402,82 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class CalculateMonthBalanceTask extends AsyncTask<ContentValues, Integer, Double> {
-
-        // This is the reference to the associated listener
-        private final TaskListener taskListener;
-
-        public CalculateMonthBalanceTask(TaskListener taskListener) {
-            this.taskListener = taskListener;
-        }
-
-        public CalculateMonthBalanceTask() {
-            this.taskListener = null;
-        }
-
-        protected Double doInBackground(ContentValues... months) {
-            // Define a projection that specifies which columns from the singularity.com.br.fkngpunchclock.database
-            // you will actually use after this query.
-            String[] projection = {
-                    DBContract.DayBalance._ID,
-                    DBContract.DayBalance.COLUMN_NAME_DAY,
-                    DBContract.DayBalance.COLUMN_NAME_MONTH,
-                    DBContract.DayBalance.COLUMN_NAME_YEAR,
-                    DBContract.DayBalance.COLUMN_NAME_BALANCE
-            };
-
-            String campoMes = "(";
-            String campoAno = "(";
-            for (int aux = 0; aux < months.length; aux++) {
-                campoMes += "'" + months[aux].get(DBContract.DayBalance.COLUMN_NAME_MONTH) + "'";
-                campoAno += "'" + months[aux].get(DBContract.DayBalance.COLUMN_NAME_YEAR) + "'";
-                if (aux < months.length - 1) {
-                    campoMes += ',';
-                    campoAno += ',';
-                }
-            }
-            campoMes += ")";
-            campoAno += ")";
-
-            String selection = DBContract.DayBalance.COLUMN_NAME_MONTH+ " in " + campoMes +
-                    " and "+ DBContract.DayBalance.COLUMN_NAME_YEAR+" in "+ campoAno;
-
-            Cursor cursor = db.query(
-                    DBContract.DayBalance.TABLE_NAME, projection, selection, null, null, null, null);
-
-            ArrayList<DayBalance> balances = new ArrayList<>();
-            Double balance = 0.0;
-
-            while (cursor.moveToNext()) {
-                DayBalance db = new DayBalance();
-                db.setId(cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance._ID)));
-                db.setDay(cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_DAY)));
-                db.setMonth(cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_MONTH)));
-                db.setYear(cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_YEAR)));
-                db.setBalance(cursor.getDouble(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_BALANCE)));
-                balances.add(db);
-                balance += cursor.getDouble(
-                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_BALANCE));
-            }
-            cursor.close();
-
-            return balance;
-        }
-
-        protected void onPostExecute(Double balance) {
-            Double total = balance + dayTotalBalance;
-            monthBalance.setText(total.toString());
-        }
-    }
+//    private class CalculateMonthBalanceTask extends AsyncTask<ContentValues, Integer, Double> {
+//
+//        // This is the reference to the associated listener
+//        private final TaskListener taskListener;
+//
+//        public CalculateMonthBalanceTask(TaskListener taskListener) {
+//            this.taskListener = taskListener;
+//        }
+//
+//        public CalculateMonthBalanceTask() {
+//            this.taskListener = null;
+//        }
+//
+//        protected Double doInBackground(ContentValues... months) {
+//            // Define a projection that specifies which columns from the singularity.com.br.fkngpunchclock.database
+//            // you will actually use after this query.
+//            String[] projection = {
+//                    DBContract.DayBalance._ID,
+//                    DBContract.DayBalance.COLUMN_NAME_DAY,
+//                    DBContract.DayBalance.COLUMN_NAME_MONTH,
+//                    DBContract.DayBalance.COLUMN_NAME_YEAR,
+//                    DBContract.DayBalance.COLUMN_NAME_BALANCE
+//            };
+//
+//            String selection = "SELECT * FROM "
+//
+//            String campoMes = "(";
+//            String campoAno = "(";
+//            for (int aux = 0; aux < months.length; aux++) {
+//                campoMes += "'" + months[aux].get(DBContract.DayBalance.COLUMN_NAME_MONTH) + "'";
+//                campoAno += "'" + months[aux].get(DBContract.DayBalance.COLUMN_NAME_YEAR) + "'";
+//                if (aux < months.length - 1) {
+//                    campoMes += ',';
+//                    campoAno += ',';
+//                }
+//            }
+//            campoMes += ")";
+//            campoAno += ")";
+//
+////            String selection = DBContract.DayBalance.COLUMN_NAME_MONTH+ " in " + campoMes +
+////                    " and "+ DBContract.DayBalance.COLUMN_NAME_YEAR+" in "+ campoAno;
+////
+////            Cursor cursor = db.query(
+////                    DBContract.DayBalance.TABLE_NAME, projection, selection, null, null, null, null);
+//
+//            Cursor cursor = db.rawQuery( );
+//
+//            ArrayList<DayBalance> balances = new ArrayList<>();
+//            Double balance = 0.0;
+//
+//            while (cursor.moveToNext()) {
+//                DayBalance db = new DayBalance();
+//                db.setId(cursor.getInt(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance._ID)));
+//                db.setDay(cursor.getInt(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_DAY)));
+//                db.setMonth(cursor.getInt(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_MONTH)));
+//                db.setYear(cursor.getInt(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_YEAR)));
+//                db.setBalance(cursor.getDouble(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_BALANCE)));
+//                balances.add(db);
+//                balance += cursor.getDouble(
+//                        cursor.getColumnIndexOrThrow(DBContract.DayBalance.COLUMN_NAME_BALANCE));
+//            }
+//            cursor.close();
+//
+//            return balance;
+//        }
+//
+//        protected void onPostExecute(Double balance) {
+//            Double total = balance + dayTotalBalance;
+//            monthBalance.setText(total.toString());
+//        }
+//    }
 
 
 

@@ -146,7 +146,7 @@ public class JobSchedulerService extends JobService {
             // you will actually use after this query.
             String[] projection = {
                     DBContract.ClockPunch._ID,
-                    DBContract.ClockPunch.COLUMN_NAME_DATE,
+                    DBContract.ClockPunch.COLUMN_NAME_DAY,
                     DBContract.ClockPunch.COLUMN_NAME_TIME
             };
 
@@ -159,7 +159,7 @@ public class JobSchedulerService extends JobService {
             }
             campo += ")";
 
-            String selection = DBContract.ClockPunch.COLUMN_NAME_DATE + " in " + campo;
+            String selection = DBContract.ClockPunch.COLUMN_NAME_DAY + " in " + campo;
 
             Cursor cursor = db.query(
                     DBContract.ClockPunch.TABLE_NAME, projection, selection, null, null, null, null);
@@ -171,7 +171,7 @@ public class JobSchedulerService extends JobService {
                 pt.setId(cursor.getInt(
                         cursor.getColumnIndexOrThrow(DBContract.ClockPunch._ID)));
                 pt.setDate(cursor.getString(
-                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_DATE)));
+                        cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_DAY)));
                 pt.setTime(cursor.getString(
                         cursor.getColumnIndexOrThrow(DBContract.ClockPunch.COLUMN_NAME_TIME)));
                 clockPunches.add(pt);
