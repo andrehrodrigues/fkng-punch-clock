@@ -16,14 +16,20 @@ public class ClockPunch {
     public ClockPunch() {
     }
 
-    public ClockPunch(String date, String time) {
+    public ClockPunch(String date, String time, boolean is24HourModeEnabled) {
+
+        //Get the full data string and splits it into separeted values.
         convertDateStringToInt(date);
-        String parts[] = time.split(" ");
-        if(parts[1] == "PM"){
-            convertTimeStringTo24Format(time);
-        }else{
-            this.time = time;
+
+        //If is not 24 hours time treat to convert to 24.
+        if( is24HourModeEnabled  == false){
+            String parts[] = time.split(" ");
+            if("PM".equals(parts[1])){
+                time = convertTimeStringTo24Format(parts[0]);
+            }
         }
+
+        this.time = time;
     }
 
     public ClockPunch(int day, int month, int year, String date, String time) {
@@ -89,9 +95,9 @@ public class ClockPunch {
         setYear(Integer.parseInt(parts[2]));
     }
 
-    private void convertTimeStringTo24Format(String time){
+    private String convertTimeStringTo24Format(String time){
         String parts[] = time.split(":");
         String convTime = String.valueOf(Integer.parseInt(parts[0]) + 12)+":"+parts[1];
-        setTime(convTime);
+        return convTime;
     }
 }

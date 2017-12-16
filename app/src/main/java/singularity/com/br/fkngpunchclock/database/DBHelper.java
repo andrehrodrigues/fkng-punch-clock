@@ -30,8 +30,8 @@ public class DBHelper extends SQLiteOpenHelper {
         // to simply to discard the data and start over
         onDelete(db);
         onCreate(db);
-        insertMonthDummies(db,8);
-        insertMonthDummies(db,9);
+        insertMonthDummies(db,11);
+        insertMonthDummies(db,12);
     }
     public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         onUpgrade(db, oldVersion, newVersion);
