@@ -1,5 +1,6 @@
 package singularity.com.br.fkngpunchclock.activities;
 
+import android.app.DatePickerDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
@@ -13,6 +14,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
 import android.support.design.widget.FloatingActionButton;
 import android.view.View;
+import android.widget.DatePicker;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextClock;
@@ -25,6 +27,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import singularity.com.br.fkngpunchclock.R;
@@ -88,6 +91,13 @@ public class MainActivity extends AppCompatActivity {
 
         //Set the punchDate to the current date.
         punchDate.setText(dateFormat.format(date).toString());
+        punchDate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View arg0) {
+                DatePickerDialog datePicker = setDatePicker();
+                datePicker.show();
+            }
+        });
 
         //Set the view list (and respective adapter) to keep the ongoing clock punchs.
         adapter = new PunchListAdapter(MainActivity.this, R.layout.ponto_item_list_view, clockPunches);
@@ -107,6 +117,22 @@ public class MainActivity extends AppCompatActivity {
         getMonthBalance( String.valueOf(Calendar.getInstance().get(Calendar.MONTH)+ 1) , String.valueOf(Calendar.getInstance().get(Calendar.YEAR)) );
 
     }//End of OnCreate()
+
+    private DatePickerDialog setDatePicker() {
+
+        Calendar newCalendar = Calendar.getInstance();
+        return new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+
+            public void onDateSet(DatePicker view, int year, int monthOfYear, int dayOfMonth) {
+                Calendar newDate = Calendar.getInstance();
+                newDate.set(year, monthOfYear, dayOfMonth);
+                String selectedDate = dateFormat.format(newDate.getTime());
+                punchDate.setText(selectedDate);
+                refreshListView(selectedDate);
+            }
+
+        },newCalendar.get(Calendar.YEAR), newCalendar.get(Calendar.MONTH), newCalendar.get(Calendar.DAY_OF_MONTH));
+    }
 
     public void removeItemOnClickHandler(View v) {
         ClockPunch itemToRemove = (ClockPunch) v.getTag();
@@ -257,7 +283,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //Calculate the month balance based on the current day balance (saved in milliseconds) and the month balance (saved considering the whole month minus the current day).
-    public void updateMonthBalance(){
+    public void updateMonthBalance()
+    {
         monthBalance.setText( millisecondsToTimeString( monthBalanceDayBefore + dayTotalBalance ) );
     }
 
